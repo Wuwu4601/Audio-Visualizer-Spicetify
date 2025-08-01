@@ -1,7 +1,6 @@
 .qodo
 
-<<<<<<< HEAD
-node_modules 
-=======
+
 node_modules/
->>>>>>> dfacb351d0e16d8b2811cecd64d87d5e12f786e5
+dist/
+
