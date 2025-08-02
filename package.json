@@ -4,7 +4,7 @@
   "description": "A beat-reactive audio visualizer overlay",
   "main": "dist/audio-visualizer.js",
   "scripts": {
-    "build": "esbuild src/index.js --bundle --outfile=dist/audio-visualizer.js --format=iife --target=es2020"
+   "build": "node build.js"
   },
   "repository": {
     "type": "git",
@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/Wuwu4601/Audio-Visualizer-Spicetify#readme",
   "devDependencies": {
-    "esbuild": "^0.25.8"
+    "esbuild": "^0.25.8",
+    "esbuild-plugin-env": "^1.1.1"
   }
 }
