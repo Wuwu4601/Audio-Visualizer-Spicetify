@@ -19,42 +19,6 @@
     });
   }
 
-  async function getCoverColor() {
-    try {
-      const img = document.querySelector(".main-nowPlayingWidget-coverArt-image img");
-      if (!img) return "white";
-
-      const cover = new Image();
-      cover.crossOrigin = "Anonymous";
-      cover.src = img.src;
-
-      await new Promise((res) => (cover.onload = res));
-
-      const tempCanvas = document.createElement("canvas");
-      const ctx = tempCanvas.getContext("2d");
-      tempCanvas.width = 10;
-      tempCanvas.height = 10;
-      ctx.drawImage(cover, 0, 0, 10, 10);
-
-      const data = ctx.getImageData(0, 0, 10, 10).data;
-      let r = 0, g = 0, b = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        r += data[i];
-        g += data[i + 1];
-        b += data[i + 2];
-      }
-
-      const pixels = data.length / 4;
-      r = Math.floor(r / pixels);
-      g = Math.floor(g / pixels);
-      b = Math.floor(b / pixels);
-
-      return `rgb(${r},${g},${b})`;
-    } catch {
-      return "white";
-    }
-  }
-
   function getFakeVolume() {
     const volBar = document.querySelector('[aria-label="Volumen"] .progress-bar__bg');
     const volFill = document.querySelector('[aria-label="Volumen"] .progress-bar__fg');
@@ -71,6 +35,7 @@
   }
 
   async function main() {
+    let isPaused = false;
     const bar = await waitForElement(".main-nowPlayingBar-nowPlayingBar");
 
     if (document.getElementById("my-visualizer")) return;
@@ -83,7 +48,7 @@
     visualizer.style.width = "100%";
     visualizer.style.height = "100%";
     visualizer.style.pointerEvents = "none";
-    visualizer.style.zIndex = "1"; // debajo de todo
+    visualizer.style.zIndex = "1"; 
     visualizer.style.background = "transparent";
 
     const canvas = document.createElement("canvas");
@@ -97,34 +62,40 @@
 
     visualizer.appendChild(canvas);
     bar.style.position = "relative";
-    bar.prepend(visualizer); // se coloca detrás
+    bar.prepend(visualizer); 
 
     const ctx = canvas.getContext("2d");
     const numBars = 100;
     let bars = Array(numBars).fill(0);
     let targetHeights = Array(numBars).fill(0);
-    let color = "lime";
+    let color = "white"; 
     let wavePhase = 0;
 
-    async function updateColor() {
-      color = await getCoverColor();
-    }
-
-    updateColor();
-    const observer = new MutationObserver(updateColor);
-    const trackInfo = await waitForElement(".main-nowPlayingWidget-nowPlaying");
-    observer.observe(trackInfo, { childList: true, subtree: true });
-
     function animate() {
-      const volume = getFakeVolume();
-      const volumeFactor = Math.max(0.2, volume);
+      const playing = Spicetify?.Player?.isPlaying();
+      if (playing !== !isPaused) {
+        isPaused = !playing;
+      }
 
-      if (settings.mode === "bars") {
+      if (isPaused) {
+        for (let i = 0; i < numBars; i++) {
+          bars[i] += (0 - bars[i]) * 0.05;
+        }
+      } else {
+        const volume = getFakeVolume();
+        const volumeFactor = Math.max(0.2, volume);
         for (let i = 0; i < numBars; i++) {
           if (Math.random() < 0.03) {
-            targetHeights[i] = Math.random() * canvas.height * volumeFactor;
+            targetHeights [i] = Math.random() * canvas.height * volumeFactor;
           }
-          bars[i] += (targetHeights[i] - bars[i]) * 0.03;
+          const speedUp = 0.04;  
+          const speedDown = 0.02;
+
+          if (targetHeights[i] > bars[i]) {
+            bars[i] += (targetHeights[i] - bars[i]) * speedUp;
+          } else {
+            bars[i] += (targetHeights[i] - bars[i]) *speedDown;
+          }
         }
       }
 
@@ -140,26 +111,13 @@
           const height = bars[i];
           ctx.fillRect(x, canvas.height - height, width, height);
         }
-      } else if (settings.mode === "waves") {
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height / 2);
-        for (let x = 0; x <= canvas.width; x++) {
-          const y = canvas.height / 2 + Math.sin((x + wavePhase) * 0.05) * (30 * volumeFactor);
-          ctx.lineTo(x, y);
-        }
-        ctx.lineTo(canvas.width, canvas.height);
-        ctx.lineTo(0, canvas.height);
-        ctx.closePath();
-        ctx.fill();
-        wavePhase += 2;
+
       }
 
       requestAnimationFrame(animate);
     }
 
     animate();
-
-
   }
 
   if (document.readyState === "complete") {
