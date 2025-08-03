@@ -121,10 +121,10 @@
 
       if (settings.mode === "bars") {
         for (let i = 0; i < numBars; i++) {
-          if (Math.random() < 0.05) {
+          if (Math.random() < 0.03) {
             targetHeights[i] = Math.random() * canvas.height * volumeFactor;
           }
-          bars[i] += (targetHeights[i] - bars[i]) * 0.05;
+          bars[i] += (targetHeights[i] - bars[i]) * 0.03;
         }
       }
 
@@ -159,10 +159,7 @@
 
     animate();
 
-    window.addEventListener("tripleclick", () => {
-      settings.mode = settings.mode === "bars" ? "waves" : "bars";
-      saveSettings();
-    });
+
   }
 
   if (document.readyState === "complete") {
