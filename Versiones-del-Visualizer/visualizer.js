@@ -1,11 +1,7 @@
 (function () {
+  // 1. Variables globales del IIFE
   const SETTINGS_KEY = "spicetify_visualizer_settings";
   let settings = { mode: "bars" };
-
-  try {
-    const stored = localStorage.getItem(SETTINGS_KEY);
-    if (stored) settings = JSON.parse(stored);
-  } catch {}
 
   async function waitForElement(selector) {
     return new Promise((resolve) => {
@@ -17,42 +13,6 @@
         }
       }, 300);
     });
-  }
-
-  async function getCoverColor() {
-    try {
-      const img = document.querySelector(".main-nowPlayingWidget-coverArt-image img");
-      if (!img) return "white";
-
-      const cover = new Image();
-      cover.crossOrigin = "Anonymous";
-      cover.src = img.src;
-
-      await new Promise((res) => (cover.onload = res));
-
-      const tempCanvas = document.createElement("canvas");
-      const ctx = tempCanvas.getContext("2d");
-      tempCanvas.width = 10;
-      tempCanvas.height = 10;
-      ctx.drawImage(cover, 0, 0, 10, 10);
-
-      const data = ctx.getImageData(0, 0, 10, 10).data;
-      let r = 0, g = 0, b = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        r += data[i];
-        g += data[i + 1];
-        b += data[i + 2];
-      }
-
-      const pixels = data.length / 4;
-      r = Math.floor(r / pixels);
-      g = Math.floor(g / pixels);
-      b = Math.floor(b / pixels);
-
-      return `rgb(${r},${g},${b})`;
-    } catch {
-      return "white";
-    }
   }
 
   function getFakeVolume() {
@@ -72,8 +32,15 @@
 
   async function main() {
     const bar = await waitForElement(".main-nowPlayingBar-nowPlayingBar");
+    const coverImg = await waitForElement(".main-nowPlayingWidget-coverArt img");
+    console.log("Carátula:", coverImg.src);
 
-    if (document.getElementById("my-visualizer")) return;
+    const numBars = 100;
+    let bars = Array(numBars).fill(0);
+    let targetHeights = Array(numBars).fill(0);
+    let color = "white";
+
+    if (document.getElementById("my-visualizer")) return; 
 
     const visualizer = document.createElement("div");
     visualizer.id = "my-visualizer";
@@ -83,7 +50,7 @@
     visualizer.style.width = "100%";
     visualizer.style.height = "100%";
     visualizer.style.pointerEvents = "none";
-    visualizer.style.zIndex = "1"; // debajo de todo
+    visualizer.style.zIndex = "1";
     visualizer.style.background = "transparent";
 
     const canvas = document.createElement("canvas");
@@ -97,34 +64,79 @@
 
     visualizer.appendChild(canvas);
     bar.style.position = "relative";
-    bar.prepend(visualizer); // se coloca detrás
+    bar.prepend(visualizer);
 
     const ctx = canvas.getContext("2d");
-    const numBars = 100;
-    let bars = Array(numBars).fill(0);
-    let targetHeights = Array(numBars).fill(0);
-    let color = "lime";
-    let wavePhase = 0;
 
     async function updateColor() {
-      color = await getCoverColor();
+      try {
+        const img = document.querySelector(".main-nowPlayingWidget-coverArt img");
+        if (!img) {
+          color = "white";
+          return;
+        }
+        const cover = new Image();
+        cover.crossOrigin = "Anonymous";
+        cover.src = img.src;
+        await new Promise((res) => (cover.onload = res));
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCanvas.width = 10;
+        tempCanvas.height = 10;
+        tempCtx.drawImage(cover, 0, 0, 10, 10);
+
+        const data = tempCtx.getImageData(0, 0, 10, 10).data;
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+        }
+        const pixels = data.length / 4;
+        r = Math.floor(r / pixels);
+        g = Math.floor(g / pixels);
+        b = Math.floor(b / pixels);
+
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        if (brightness < 100) {
+          r = Math.min(255, r + 100);
+          g = Math.min(255, g + 100);
+          b = Math.min(255, b + 100);
+        }
+
+        color = `rgb(${r},${g},${b})`;
+      } catch {
+        color = "white";
+      }
     }
 
-    updateColor();
-    const observer = new MutationObserver(updateColor);
-    const trackInfo = await waitForElement(".main-nowPlayingWidget-nowPlaying");
-    observer.observe(trackInfo, { childList: true, subtree: true });
+    await updateColor();
+    setInterval(updateColor, 1000);
 
+    let isPaused = false;
     function animate() {
-      const volume = getFakeVolume();
-      const volumeFactor = Math.max(0.2, volume);
+      const playing = Spicetify?.Player?.isPlaying();
+      if (playing !== !isPaused) isPaused = !playing;
 
-      if (settings.mode === "bars") {
-        for (let i = 0; i < numBars; i++) {
-          if (Math.random() < 0.05) {
-            targetHeights[i] = Math.random() * canvas.height * volumeFactor;
+      const volume = getFakeVolume();
+      const progress = Spicetify?.Player?.getProgressPercent?.() ?? 0.5;
+      const combinedFactor = Math.max(0.3, progress * volume);
+
+      for (let i = 0; i < numBars; i++) {
+        if (isPaused) {
+          bars[i] += (0 - bars[i]) * 0.05;
+        } else {
+          if (Math.random() < 0.08) {
+            targetHeights[i] = Math.random() * canvas.height * combinedFactor;
           }
-          bars[i] += (targetHeights[i] - bars[i]) * 0.05;
+          const speedUp = 0.04;
+          const speedDown = 0.02;
+
+          if (targetHeights[i] > bars[i]) {
+            bars[i] += (targetHeights[i] - bars[i]) * speedUp;
+          } else {
+            bars[i] += (targetHeights[i] - bars[i]) * speedDown;
+          }
         }
       }
 
@@ -133,36 +145,17 @@
       ctx.shadowColor = color;
       ctx.fillStyle = color;
 
-      if (settings.mode === "bars") {
-        for (let i = 0; i < numBars; i++) {
-          const x = (canvas.width / numBars) * i;
-          const width = (canvas.width / numBars) - 2;
-          const height = bars[i];
-          ctx.fillRect(x, canvas.height - height, width, height);
-        }
-      } else if (settings.mode === "waves") {
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height / 2);
-        for (let x = 0; x <= canvas.width; x++) {
-          const y = canvas.height / 2 + Math.sin((x + wavePhase) * 0.05) * (30 * volumeFactor);
-          ctx.lineTo(x, y);
-        }
-        ctx.lineTo(canvas.width, canvas.height);
-        ctx.lineTo(0, canvas.height);
-        ctx.closePath();
-        ctx.fill();
-        wavePhase += 2;
+      for (let i = 0; i < numBars; i++) {
+        const x = (canvas.width / numBars) * i;
+        const width = (canvas.width / numBars) - 2;
+        const height = bars[i];
+        ctx.fillRect(x, canvas.height - height, width, height);
       }
 
       requestAnimationFrame(animate);
     }
 
     animate();
-
-    window.addEventListener("tripleclick", () => {
-      settings.mode = settings.mode === "bars" ? "waves" : "bars";
-      saveSettings();
-    });
   }
 
   if (document.readyState === "complete") {
