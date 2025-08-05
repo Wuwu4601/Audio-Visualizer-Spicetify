@@ -1,6 +1,6 @@
 .qodo
 
-
+.env
 node_modules/
 dist/
 versiones-del-visualizer/

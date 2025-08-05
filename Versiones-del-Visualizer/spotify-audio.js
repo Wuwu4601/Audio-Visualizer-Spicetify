@@ -1,6 +1,7 @@
-const client_id = '7402871e1f1e47eea15cf69cd570959b';
+const client_id = process.env.clientId;
 const client_secret = process.env.clientsecret
-const track_id = '0y1QJc3SJVPKJ1OvFmFqe6'; // Bohemian Rhapsody
+const track_id = '0y1QJc3SJVPKJ1OvFmFqe6';
+// Make this project works with any track.
 
 async function getAccessToken() {
     const credentials = btoa(`${client_id}:${client_secret}`);
